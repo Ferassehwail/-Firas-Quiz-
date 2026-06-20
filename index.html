@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>أكاديمية التحدي الذكي</title>
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="manifest" href="manifest.json">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;700;900&display=swap');
+        body { font-family: 'Cairo', sans-serif; background: #0f172a; }
+        .phone-frame { width: 100%; max-width: 400px; height: 850px; background: white; margin: 10px auto; border-radius: 40px; overflow: hidden; position: relative; border: 6px solid #1e293b; }
+        .premium-image-box { background: linear-gradient(135deg, #1e293b 0%, #334155 100%); display: flex; flex-direction: column; align-items: center; justify-content: center; color: #60a5fa; height: 150px; }
+    </style>
+</head>
+<body>
+
+<div class="phone-frame flex flex-col" id="app">
+    <div id="screen-home" class="flex-1 flex flex-col items-center justify-center p-8 bg-indigo-600 text-white text-center">
+        <h1 class="text-4xl font-black mb-4">أكاديمية التحدي</h1>
+        <p class="font-black text-lg mb-8">تصميم وتنفيذ : م. فراس محمد سحويل</p>
+        <button onclick="showLevels()" class="bg-white text-indigo-600 px-10 py-4 rounded-full font-bold text-xl shadow-2xl">ابدأ التحدي</button>
+    </div>
+
+    <div id="screen-levels" class="hidden flex-1 p-6 overflow-y-auto bg-slate-50">
+        <h2 class="text-2xl font-bold mb-6 text-center">اختر الحلقة</h2>
+        <div id="levels-grid" class="grid grid-cols-4 gap-3"></div>
+    </div>
+
+    <div id="screen-quiz" class="hidden flex-1 flex flex-col bg-slate-50">
+        <div class="premium-image-box">
+            <span class="text-2xl font-black tracking-widest text-white">تحدي الذكاء</span>
+        </div>
+        <div id="question-text" class="text-xl font-bold p-6 text-slate-800 text-center flex-grow flex items-center justify-center"></div>
+        <div id="options-grid" class="p-4 space-y-3"></div>
+        <div class="p-4 border-t flex justify-between">
+            <button onclick="changeQ(-1)" class="bg-slate-200 px-6 py-3 rounded-xl font-bold">رجوع</button>
+            <button onclick="finishGame()" class="bg-green-600 text-white px-6 py-3 rounded-xl font-bold">تسليم</button>
+        </div>
+    </div>
+</div>
+
+<script>
+    // 1. تسجيل الـ Service Worker للأوفلاين
+    if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+            navigator.serviceWorker.register('/sw.js').catch(err => console.log('SW Failed', err));
+        });
+    }
+
+    const API_URL = "https://script.google.com/macros/s/AKfycbyuaCDKBRa-GPlROopieL9nY0C6GRihVkUTpfrKfrUKPPkkt86AvDZq78dAjWC2tn4bvg/exec";
+    let state = { questions: [], currentIndex: 0, answers: {}, unlocked: localStorage.getItem('unlocked') || 1 };
+
+    function showLevels() {
+        document.getElementById('screen-home').classList.add('hidden');
+        document.getElementById('screen-levels').classList.remove('hidden');
+        const grid = document.getElementById('levels-grid');
+        grid.innerHTML = '';
+        for(let i=1; i<=100; i++) {
+            grid.innerHTML += `<button onclick="startQuiz(${i})" class="p-4 ${i > state.unlocked ? 'bg-slate-300' : 'bg-blue-600 text-white'} rounded-xl font-bold">${i > state.unlocked ? '🔒' : i}</button>`;
+        }
+    }
+
+    async function startQuiz(level) {
+        Swal.fire({ title: 'جاري التحميل...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+        const res = await fetch(`${API_URL}?level=${level}`);
+        state.questions = await res.json();
+        state.currentIndex = 0; state.answers = {};
+        document.getElementById('screen-home').classList.add('hidden');
+        document.getElementById('screen-levels').classList.add('hidden');
+        document.getElementById('screen-quiz').classList.remove('hidden');
+        renderQ();
+        Swal.close();
+    }
+
+    function renderQ() {
+        const q = state.questions[state.currentIndex];
+        document.getElementById('question-text').innerText = `${state.currentIndex + 1} / 30 \n\n ${q.question}`;
+        const grid = document.getElementById('options-grid');
+        grid.innerHTML = ['optionA', 'optionB', 'optionC', 'optionD'].map(opt => `
+            <button onclick="saveAns('${q[opt]}')" class="w-full p-4 bg-white border border-slate-200 rounded-xl text-right font-bold hover:border-blue-500">${q[opt]}</button>
+        `).join('');
+    }
+
+    function saveAns(val) { 
+        state.answers[state.currentIndex] = val; 
+        if(state.currentIndex < 29) { state.currentIndex++; renderQ(); } 
+    }
+
+    function changeQ(dir) { if(state.currentIndex > 0) { state.currentIndex += dir; renderQ(); } }
+
+    function finishGame() {
+        let score = 0;
+        state.questions.forEach((q, i) => { if(state.answers[i] === q.correctAnswer) score++; });
+        let percent = (score/30)*100;
+        if(percent >= 95) {
+            localStorage.setItem('unlocked', parseInt(state.unlocked) + 1);
+            Swal.fire('إنجاز عبقري!', 'تصميم وتنفيذ : م. فراس محمد سحويل', 'success').then(() => location.reload());
+        } else {
+            Swal.fire('حاول مجدداً', `نتيجتك ${percent}%، تحتاج 95% للفتح.`, 'error');
+        }
+    }
+</script>
+</body>
+</html>
